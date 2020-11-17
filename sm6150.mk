@@ -280,6 +280,10 @@ PRODUCT_COPY_FILES += \
 PRODUCT_PACKAGES += \
     netutils-wrapper-1.0
 
+# Power
+PRODUCT_PACKAGES += \
+    android.hardware.power-service-qti
+
 # QTI
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/configs/qti_whitelist.xml:$(TARGET_COPY_OUT_SYSTEM)/etc/sysconfig/qti_whitelist.xml
@@ -290,6 +294,7 @@ PRODUCT_PACKAGES += \
     fstab.emmc \
     init.insmod.sh \
     init.mi.usb.sh \
+    init.qcom.post_boot.sh \
     init.power.rc \
     init.qcom.rc \
     init.qcom.usb.rc \
