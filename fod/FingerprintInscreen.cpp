@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2020 The LineageOS Project
+ * Copyright (C) 2019-2021 The LineageOS Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,12 +18,13 @@
 
 #include "FingerprintInscreen.h"
 
+#include <android-base/file.h>
 #include <android-base/logging.h>
 #include <fcntl.h>
-#include <fstream>
 #include <hardware_legacy/power.h>
 #include <poll.h>
 #include <sys/stat.h>
+#include <chrono>
 #include <thread>
 
 #define FINGERPRINT_ACQUIRED_VENDOR 6
@@ -34,12 +35,16 @@
 
 #define Touch_Fod_Enable 10
 #define Touch_Aod_Enable 11
-
 #define FOD_SENSOR_X 445
 #define FOD_SENSOR_Y FOD_POS_Y
 #define FOD_SENSOR_SIZE 190
 
+#define DIM_LAYER_HBM_PATH "/sys/devices/platform/soc/soc:qcom,dsi-display/dimlayer_hbm"
+#define DIM_LAYER_OFF_DELAY 85ms
 #define FOD_UI_PATH "/sys/devices/platform/soc/soc:qcom,dsi-display/fod_ui"
+
+using ::android::base::WriteStringToFile;
+using namespace std::chrono_literals;
 
 namespace {
 static bool readBool(int fd) {
@@ -60,7 +65,12 @@ static bool readBool(int fd) {
 
     return c != '0';
 }
+
+// Write value to path and close file.
+bool WriteToFile(const std::string& path, uint32_t content) {
+    return WriteStringToFile(std::to_string(content), path);
 }
+}  // namespace
 namespace vendor {
 namespace lineage {
 namespace biometrics {
@@ -80,9 +90,9 @@ FingerprintInscreen::FingerprintInscreen() {
         }
 
         struct pollfd fodUiPoll = {
-            .fd = fd,
-            .events = POLLERR | POLLPRI,
-            .revents = 0,
+                .fd = fd,
+                .events = POLLERR | POLLPRI,
+                .revents = 0,
         };
 
         while (true) {
@@ -93,7 +103,7 @@ FingerprintInscreen::FingerprintInscreen() {
             }
 
             xiaomiFingerprintService->extCmd(COMMAND_NIT,
-                    readBool(fd) ? PARAM_NIT_630_FOD : PARAM_NIT_NONE);
+                                             readBool(fd) ? PARAM_NIT_630_FOD : PARAM_NIT_NONE);
         }
     }).detach();
 }
@@ -120,6 +130,7 @@ Return<void> FingerprintInscreen::onFinishEnroll() {
 
 Return<void> FingerprintInscreen::onPress() {
     acquire_wake_lock(PARTIAL_WAKE_LOCK, LOG_TAG);
+    WriteToFile(DIM_LAYER_HBM_PATH, 1);
     return Void();
 }
 
@@ -130,11 +141,14 @@ Return<void> FingerprintInscreen::onRelease() {
 }
 
 Return<void> FingerprintInscreen::onShowFODView() {
+    WriteToFile(DIM_LAYER_HBM_PATH, 1);
     TouchFeatureService->setTouchMode(Touch_Fod_Enable, 1);
     return Void();
 }
 
 Return<void> FingerprintInscreen::onHideFODView() {
+    std::this_thread::sleep_for(DIM_LAYER_OFF_DELAY);
+    WriteToFile(DIM_LAYER_HBM_PATH, 0);
     return Void();
 }
 
